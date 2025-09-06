@@ -21,10 +21,12 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 dependencies = [
+    "fastapi>=0.116.1",
     "huggingface_hub",
     "lightrag-hku",
     "mineru[core]",
     "tqdm",
+    "uvicorn[standard]>=0.35.0",
 ]
 
 [project.optional-dependencies]

@@ -1011,6 +1011,24 @@ python examples/text_format_test.py --check-reportlab --file dummy
 
 ---
 
+## 🧩 FastAPI Service (Local UI Backend)
+
+Spin up a minimal API server to query and process documents using RAG-Anything with LM Studio. This is handy for hooking up a simple UI.
+
+Quick start (using uv):
+
+```bash
+# Install FastAPI and Uvicorn into the existing uv environment
+uv add fastapi uvicorn[standard]
+
+# Run the server (reload for dev)
+uv run uvicorn service.app:app --reload
+```
+
+For more details, see `service/README.md`.
+
+---
+
 ## 🔧 Configuration
 
 *System Optimization Parameters*

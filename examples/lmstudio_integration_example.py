@@ -76,7 +76,7 @@ class LMStudioRAGIntegration:
         # RAG-Anything configuration
         # Use a fresh working directory each run to avoid legacy doc_status schema conflicts
         self.config = RAGAnythingConfig(
-            working_dir=f"./rag_storage_lmstudio_demo/{uuid.uuid4()}",
+            working_dir=f"./rag_storage_lmstudio/{uuid.uuid4()}",
             parser="mineru",
             parse_method="auto",
             enable_image_processing=False,

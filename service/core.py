@@ -1,0 +1,170 @@
+import os
+import uuid
+import asyncio
+from typing import List, Optional
+
+from raganything import RAGAnything, RAGAnythingConfig
+from lightrag.utils import EmbeddingFunc
+
+# Environment variables (compatible with README .env usage)
+LM_BASE_URL = os.getenv("LMSTUDIO_API_HOST", "http://localhost:1234/v1")
+LM_API_KEY = os.getenv("LMSTUDIO_API_KEY", "lm-studio")
+LM_MODEL_NAME = os.getenv("MODEL_CHOICE", "openai/gpt-oss-20b")
+LM_EMBED_MODEL = os.getenv("EMBEDDING_MODEL_CHOICE", "text-embedding-nomic-embed-text-v1.5")
+
+rag_instance: Optional[RAGAnything] = None
+
+# Concurrency limiter and timeout for LM Studio calls
+LLM_MAX_CONCURRENCY = int(os.getenv("LLM_MAX_CONCURRENCY", "4"))
+_LLM_SEMAPHORE = asyncio.Semaphore(LLM_MAX_CONCURRENCY)
+LLM_REQUEST_TIMEOUT = float(os.getenv("LLM_REQUEST_TIMEOUT", "60"))  # seconds
+
+
+async def lmstudio_llm_model_func(
+    prompt: str,
+    system_prompt: Optional[str] = None,
+    history_messages: Optional[List[dict]] = None,
+    **kwargs,
+) -> str:
+    from lightrag.llm.openai import openai_complete_if_cache
+
+    # Detect analysis prompts that require strict JSON fields
+    wants_json = False
+    p_low = (prompt or "").lower()
+    sp_low = (system_prompt or "").lower()
+    if (
+        '"detailed_description"' in (prompt or "")
+        or '"entity_info"' in (prompt or "")
+        or "table" in p_low
+        or "equation" in p_low
+        or "image" in p_low
+        or "analysis" in p_low
+        or "table analysis" in sp_low
+        or "image analyst" in sp_low
+        or "equation analysis" in sp_low
+    ):
+        wants_json = True
+
+    call_kwargs = dict(kwargs)
+    if wants_json:
+        # Nudge for strict JSON fields
+        system_prompt = (system_prompt or "") + (
+            " Return a strict JSON object with fields: detailed_description (string), entity_info (object with keys: entity_name, entity_type, summary)."
+        )
+        # LM Studio-compatible JSON schema; some backends require this instead of json_object
+        call_kwargs["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "analysis",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "detailed_description": {"type": "string"},
+                        "entity_info": {
+                            "type": "object",
+                            "properties": {
+                                "entity_name": {"type": "string"},
+                                "entity_type": {"type": "string"},
+                                "summary": {"type": "string"},
+                            },
+                            "required": ["entity_name", "entity_type", "summary"],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "required": ["detailed_description", "entity_info"],
+                    "additionalProperties": False,
+                },
+            },
+        }
+        # Deterministic decoding to reduce parse issues
+        call_kwargs.setdefault("temperature", 0.1)
+        call_kwargs.setdefault("top_p", 0.0)
+        call_kwargs.setdefault("max_tokens", 1024)
+
+    # Retry with exponential backoff; drop response_format if backend rejects it
+    last_err = None
+    for attempt in range(3):
+        try:
+            async with _LLM_SEMAPHORE:
+                return await openai_complete_if_cache(
+                    model=LM_MODEL_NAME,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    history_messages=history_messages or [],
+                    base_url=LM_BASE_URL,
+                    api_key=LM_API_KEY,
+                    timeout=LLM_REQUEST_TIMEOUT,
+                    **call_kwargs,
+                )
+        except Exception as e:
+            msg = str(e)
+            if wants_json and call_kwargs.get("response_format") is not None and (
+                "response_format" in msg or "json_schema" in msg or "must be 'json_schema' or 'text'" in msg
+            ):
+                # Remove response_format and retry
+                call_kwargs.pop("response_format", None)
+                await asyncio.sleep(0.25)
+                continue
+            last_err = e
+            await asyncio.sleep(0.5 * (2 ** attempt))
+    raise last_err
+
+
+async def lmstudio_embedding_async(texts: List[str]) -> List[List[float]]:
+    from lightrag.llm.openai import openai_embed
+
+    embeddings = await openai_embed(
+        texts=texts,
+        model=LM_EMBED_MODEL,
+        base_url=LM_BASE_URL,
+        api_key=LM_API_KEY,
+    )
+    return embeddings.tolist()
+
+
+def make_embedding_func() -> EmbeddingFunc:
+    return EmbeddingFunc(
+        embedding_dim=768,
+        max_token_size=8192,
+        func=lmstudio_embedding_async,
+    )
+
+
+async def get_rag() -> RAGAnything:
+    global rag_instance
+    if rag_instance is not None:
+        return rag_instance
+
+    # Fresh working dir to isolate demo runs
+    working_dir = os.getenv("WORKING_DIR", f"./rag_storage_service/{uuid.uuid4()}")
+    config = RAGAnythingConfig(
+        working_dir=working_dir,
+        parser="mineru",
+        parse_method="auto",
+        enable_image_processing=False,  # keep service simple; can be enabled later
+        enable_table_processing=True,
+        enable_equation_processing=True,
+    )
+
+    rag_instance = RAGAnything(
+        config=config,
+        llm_model_func=lmstudio_llm_model_func,
+        embedding_func=make_embedding_func(),
+    )
+
+    # Avoid writing unknown field 'multimodal_processed' with older LightRAG versions
+    async def _noop_mark_multimodal(doc_id: str):
+        return None
+
+    rag_instance._mark_multimodal_processing_complete = _noop_mark_multimodal
+
+    # For query-only use, bypass parser check and initialize LightRAG storages
+    try:
+        rag_instance._parser_installation_checked = True
+        init_result = await rag_instance._ensure_lightrag_initialized()
+        if isinstance(init_result, dict) and not init_result.get("success", False):
+            pass
+    except Exception:
+        pass
+
+    return rag_instance

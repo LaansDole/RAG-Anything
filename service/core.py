@@ -6,11 +6,13 @@ from typing import List, Optional
 from raganything import RAGAnything, RAGAnythingConfig
 from lightrag.utils import EmbeddingFunc
 
-# Environment variables (compatible with README .env usage)
-LM_BASE_URL = os.getenv("LMSTUDIO_API_HOST", "http://localhost:1234/v1")
-LM_API_KEY = os.getenv("LMSTUDIO_API_KEY", "lm-studio")
-LM_MODEL_NAME = os.getenv("MODEL_CHOICE", "openai/gpt-oss-20b")
-LM_EMBED_MODEL = os.getenv("EMBEDDING_MODEL_CHOICE", "text-embedding-nomic-embed-text-v1.5")
+# Environment variables (now using standard LLM_BINDING variables)
+LM_BASE_URL = os.getenv("LLM_BINDING_HOST", "http://localhost:1234/v1")
+LM_API_KEY = os.getenv("LLM_BINDING_API_KEY", "lm-studio")
+LM_MODEL_NAME = os.getenv("LLM_MODEL", "openai/gpt-oss-20b")
+LM_EMBED_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-nomic-embed-text-v1.5")
+LM_EMBED_BASE_URL = os.getenv("EMBEDDING_BINDING_HOST", "http://localhost:1234/v1") 
+LM_EMBED_API_KEY = os.getenv("EMBEDDING_BINDING_API_KEY", "lm-studio")
 
 rag_instance: Optional[RAGAnything] = None
 
@@ -116,8 +118,8 @@ async def lmstudio_embedding_async(texts: List[str]) -> List[List[float]]:
     embeddings = await openai_embed(
         texts=texts,
         model=LM_EMBED_MODEL,
-        base_url=LM_BASE_URL,
-        api_key=LM_API_KEY,
+        base_url=LM_EMBED_BASE_URL,
+        api_key=LM_EMBED_API_KEY,
     )
     return embeddings.tolist()
 

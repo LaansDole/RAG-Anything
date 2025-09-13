@@ -66,6 +66,7 @@ LightRAG_2-4.pdf
 download_models_hf.py
 lightrag-dev/
 gui/
+**/service/datasets/service_examples_*
 
 # unit-test files
 test_*

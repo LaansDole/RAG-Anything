@@ -48,6 +48,12 @@ async def lmstudio_llm_model_func(
         wants_json = True
 
     call_kwargs = dict(kwargs)
+    
+    # Filter out parameters that LM Studio doesn't support
+    lmstudio_incompatible_params = ['stream', 'stream_options', 'parallel_tool_calls']
+    for param in lmstudio_incompatible_params:
+        call_kwargs.pop(param, None)
+    
     if wants_json:
         # Nudge for strict JSON fields
         system_prompt = (system_prompt or "") + (
@@ -81,7 +87,7 @@ async def lmstudio_llm_model_func(
         # Deterministic decoding to reduce parse issues
         call_kwargs.setdefault("temperature", 0.1)
         call_kwargs.setdefault("top_p", 0.0)
-        call_kwargs.setdefault("max_tokens", 1024)
+        call_kwargs.setdefault("max_tokens", 512)  # Reduced for LM Studio compatibility
 
     # Retry with exponential backoff; drop response_format if backend rejects it
     last_err = None
@@ -100,11 +106,22 @@ async def lmstudio_llm_model_func(
                 )
         except Exception as e:
             msg = str(e)
+            # Handle various LM Studio compatibility issues
             if wants_json and call_kwargs.get("response_format") is not None and (
                 "response_format" in msg or "json_schema" in msg or "must be 'json_schema' or 'text'" in msg
             ):
                 # Remove response_format and retry
                 call_kwargs.pop("response_format", None)
+                await asyncio.sleep(0.25)
+                continue
+            elif "unexpected keyword argument" in msg:
+                # Handle other unexpected parameters
+                if "stream" in msg:
+                    call_kwargs.pop("stream", None)
+                if "stream_options" in msg:
+                    call_kwargs.pop("stream_options", None) 
+                if "parallel_tool_calls" in msg:
+                    call_kwargs.pop("parallel_tool_calls", None)
                 await asyncio.sleep(0.25)
                 continue
             last_err = e

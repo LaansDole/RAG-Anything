@@ -7,6 +7,12 @@ class QueryRequest(BaseModel):
     mode: str = "hybrid"
 
 
+class MultimodalQueryRequest(BaseModel):
+    query: str
+    mode: str = "hybrid"
+    multimodal_content: List[dict] = []
+
+
 class QueryResponse(BaseModel):
     result: str
 
@@ -15,10 +21,13 @@ class ContentItem(BaseModel):
     type: str
     text: Optional[str] = None
     page_idx: Optional[int] = 0
-    # Additional optional fields for multimodal stubs
+    # Additional optional fields for multimodal content
     img_path: Optional[str] = None
     table_body: Optional[str] = None
+    table_data: Optional[str] = None
+    table_caption: Optional[str] = None
     latex: Optional[str] = None
+    equation_caption: Optional[str] = None
 
 
 class InsertContentListRequest(BaseModel):

@@ -10,7 +10,7 @@ from lightrag.utils import EmbeddingFunc
 LM_BASE_URL = os.getenv("LLM_BINDING_HOST", "http://localhost:1234/v1")
 LM_API_KEY = os.getenv("LLM_BINDING_API_KEY", "lm-studio")
 LM_MODEL_NAME = os.getenv("LLM_MODEL", "openai/gpt-oss-20b")
-LM_EMBED_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-nomic-embed-text-v1.5")
+LM_EMBED_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-embeddinggemma-300m")
 LM_EMBED_BASE_URL = os.getenv("EMBEDDING_BINDING_HOST", "http://localhost:1234/v1") 
 LM_EMBED_API_KEY = os.getenv("EMBEDDING_BINDING_API_KEY", "lm-studio")
 
@@ -129,6 +129,60 @@ async def lmstudio_llm_model_func(
     raise last_err
 
 
+async def lmstudio_vision_model_func(
+    prompt: str,
+    system_prompt: Optional[str] = None,
+    history_messages: Optional[List[dict]] = None,
+    image_data: Optional[str] = None,
+    messages: Optional[List[dict]] = None,
+    **kwargs,
+) -> str:
+    """Vision model function for multimodal content processing"""
+    from lightrag.llm.openai import openai_complete_if_cache
+    
+    # If messages format is provided (for multimodal VLM enhanced query), use it directly
+    if messages:
+        return await openai_complete_if_cache(
+            model=LM_MODEL_NAME,
+            prompt="",
+            system_prompt=None,
+            history_messages=[],
+            messages=messages,
+            base_url=LM_BASE_URL,
+            api_key=LM_API_KEY,
+            **kwargs,
+        )
+    # Traditional single image format
+    elif image_data:
+        return await openai_complete_if_cache(
+            model=LM_MODEL_NAME,
+            prompt="",
+            system_prompt=None,
+            history_messages=[],
+            messages=[
+                {"role": "system", "content": system_prompt} if system_prompt else None,
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{image_data}"},
+                        },
+                    ],
+                }
+                if image_data
+                else {"role": "user", "content": prompt},
+            ],
+            base_url=LM_BASE_URL,
+            api_key=LM_API_KEY,
+            **kwargs,
+        )
+    # Pure text format - fallback to regular LLM
+    else:
+        return await lmstudio_llm_model_func(prompt, system_prompt, history_messages, **kwargs)
+
+
 async def lmstudio_embedding_async(texts: List[str]) -> List[List[float]]:
     from lightrag.llm.openai import openai_embed
 
@@ -142,9 +196,11 @@ async def lmstudio_embedding_async(texts: List[str]) -> List[List[float]]:
 
 
 def make_embedding_func() -> EmbeddingFunc:
+    # Get embedding dimension from environment variable, default based on model
+    embedding_dim = int(os.getenv("EMBEDDING_DIM", "768"))  # text-embedding-qwen3-embedding-0.6b uses 768
     return EmbeddingFunc(
-        embedding_dim=768,
-        max_token_size=8192,
+        embedding_dim=embedding_dim,
+        max_token_size=2048,
         func=lmstudio_embedding_async,
     )
 
@@ -160,7 +216,7 @@ async def get_rag() -> RAGAnything:
         working_dir=working_dir,
         parser="mineru",
         parse_method="auto",
-        enable_image_processing=False,  # keep service simple; can be enabled later
+        enable_image_processing=True,  # Enabled to match example functionality
         enable_table_processing=True,
         enable_equation_processing=True,
     )
@@ -168,6 +224,7 @@ async def get_rag() -> RAGAnything:
     rag_instance = RAGAnything(
         config=config,
         llm_model_func=lmstudio_llm_model_func,
+        vision_model_func=lmstudio_vision_model_func,
         embedding_func=make_embedding_func(),
     )
 

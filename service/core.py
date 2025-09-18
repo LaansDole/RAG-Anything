@@ -197,10 +197,11 @@ async def lmstudio_embedding_async(texts: List[str]) -> List[List[float]]:
 
 def make_embedding_func() -> EmbeddingFunc:
     # Get embedding dimension from environment variable, default based on model
-    embedding_dim = int(os.getenv("EMBEDDING_DIM", "768"))  # text-embedding-qwen3-embedding-0.6b uses 768
+    embedding_dim = int(os.getenv("EMBEDDING_DIM", "768"))
+    max_token_size = int(os.getenv("MAX_EMBED_TOKENS", "8192"))
     return EmbeddingFunc(
         embedding_dim=embedding_dim,
-        max_token_size=2048,
+        max_token_size=max_token_size,
         func=lmstudio_embedding_async,
     )
 

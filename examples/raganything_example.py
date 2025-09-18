@@ -205,10 +205,10 @@ async def process_with_rag(
         embedding_dim = int(os.getenv("EMBEDDING_DIM", "768"))
         embedding_base_url = os.getenv("EMBEDDING_BINDING_HOST", base_url)
         embedding_api_key = os.getenv("EMBEDDING_BINDING_API_KEY", api_key)
-        
+        max_token_size = int(os.getenv("MAX_EMBED_TOKENS", "8192"))
         embedding_func = EmbeddingFunc(
             embedding_dim=embedding_dim,
-            max_token_size=2048,
+            max_token_size=max_token_size,
             func=lambda texts: openai_embed(
                 texts,
                 model=embedding_model,

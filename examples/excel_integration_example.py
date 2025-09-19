@@ -114,14 +114,6 @@ async def example_pandas_integration(excel_file_path: str):
         config=config,
         llm_model_func=llm_model_func,
         embedding_func=embedding_func,
-        # Add LightRAG parameters to handle context length better
-        lightrag_kwargs={
-            "chunk_token_size": 500,      # Smaller chunks
-            "top_k": 10,                  # Fewer retrieved chunks
-            "chunk_top_k": 3,             # Fewer chunk retrievals
-            "max_entity_tokens": 200,     # Smaller entity descriptions
-            "max_relation_tokens": 200,   # Smaller relation descriptions
-        }
     )
     
     print("🔄 Processing Excel data with RAGAnything...")

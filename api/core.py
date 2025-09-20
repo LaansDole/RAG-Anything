@@ -129,60 +129,6 @@ async def lmstudio_llm_model_func(
     raise last_err
 
 
-async def lmstudio_vision_model_func(
-    prompt: str,
-    system_prompt: Optional[str] = None,
-    history_messages: Optional[List[dict]] = None,
-    image_data: Optional[str] = None,
-    messages: Optional[List[dict]] = None,
-    **kwargs,
-) -> str:
-    """Vision model function for multimodal content processing"""
-    from lightrag.llm.openai import openai_complete_if_cache
-    
-    # If messages format is provided (for multimodal VLM enhanced query), use it directly
-    if messages:
-        return await openai_complete_if_cache(
-            model=LM_MODEL_NAME,
-            prompt="",
-            system_prompt=None,
-            history_messages=[],
-            messages=messages,
-            base_url=LM_BASE_URL,
-            api_key=LM_API_KEY,
-            **kwargs,
-        )
-    # Traditional single image format
-    elif image_data:
-        return await openai_complete_if_cache(
-            model=LM_MODEL_NAME,
-            prompt="",
-            system_prompt=None,
-            history_messages=[],
-            messages=[
-                {"role": "system", "content": system_prompt} if system_prompt else None,
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{image_data}"},
-                        },
-                    ],
-                }
-                if image_data
-                else {"role": "user", "content": prompt},
-            ],
-            base_url=LM_BASE_URL,
-            api_key=LM_API_KEY,
-            **kwargs,
-        )
-    # Pure text format - fallback to regular LLM
-    else:
-        return await lmstudio_llm_model_func(prompt, system_prompt, history_messages, **kwargs)
-
-
 async def lmstudio_embedding_async(texts: List[str]) -> List[List[float]]:
     from lightrag.llm.openai import openai_embed
 
@@ -217,15 +163,15 @@ async def get_rag() -> RAGAnything:
         working_dir=working_dir,
         parser="mineru",
         parse_method="auto",
-        enable_image_processing=True,  # Enabled to match example functionality
-        enable_table_processing=True,
-        enable_equation_processing=True,
+        enable_image_processing=False,  # Disabled - focus on Office documents only
+        enable_table_processing=True,   # Keep for Excel/Office table processing
+        enable_equation_processing=False,  # Disabled - not needed for Office docs
     )
 
     rag_instance = RAGAnything(
         config=config,
         llm_model_func=lmstudio_llm_model_func,
-        vision_model_func=lmstudio_vision_model_func,
+        # vision_model_func removed - not needed for Office document processing
         embedding_func=make_embedding_func(),
     )
 

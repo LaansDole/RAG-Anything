@@ -2,6 +2,8 @@ import os
 import uuid
 import subprocess
 from pathlib import Path
+from typing import Union, Optional
+import json
 from fastapi import APIRouter, HTTPException, UploadFile, File
 
 from .core import get_rag
@@ -9,11 +11,29 @@ from .models import (
     QueryRequest,
     MultimodalQueryRequest,
     QueryResponse,
-    InsertContentListRequest,
-    InsertResponse,
+    ExcelProcessingRequest,
+    ExcelProcessingResponse,
+    FileProcessingResponse
 )
 
 router = APIRouter()
+
+
+def serialize_for_json(obj):
+    """Convert numpy types and other non-serializable types to JSON-serializable types"""
+    import numpy as np
+    if isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: serialize_for_json(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_for_json(item) for item in obj]
+    else:
+        return obj
 
 
 def check_libreoffice_installation():
@@ -73,7 +93,7 @@ async def query_multimodal(req: MultimodalQueryRequest):
         # Enhanced logging for debugging
         print(f"🔍 Multimodal query received: {req.query}")
         print(f"📋 Mode: {req.mode}")
-        print(f"🖼️  Multimodal content count: {len(req.multimodal_content)}")
+        print(f"� Multimodal content count: {len(req.multimodal_content)}")
         
         # Log multimodal content structure for debugging
         if req.multimodal_content:
@@ -82,6 +102,7 @@ async def query_multimodal(req: MultimodalQueryRequest):
         else:
             print("  No multimodal content provided - will fallback to text query")
         
+        # For Office documents, we process structured content (tables, text) without images
         result = await rag.aquery_with_multimodal(
             req.query, 
             multimodal_content=req.multimodal_content,
@@ -108,7 +129,7 @@ async def query_multimodal(req: MultimodalQueryRequest):
         raise HTTPException(status_code=500, detail=error_msg)
 
 
-@router.post("/process-file", response_model=InsertResponse)
+@router.post("/process-file", response_model=FileProcessingResponse)
 async def process_file(file: UploadFile = File(...)):
     rag = await get_rag()
     
@@ -136,9 +157,12 @@ async def process_file(file: UploadFile = File(...)):
             parse_method="auto",
             display_stats=True,
         )
-        # Return a doc_id hint; LightRAG uses content-derived IDs, but we can use filename UUID wrapper
-        doc_id = f"doc-{uuid.uuid4()}"
-        return InsertResponse(success=True, doc_id=doc_id)
+        # Return success response with filename
+        return FileProcessingResponse(
+            success=True, 
+            message=f"Successfully processed document: {file.filename}",
+            file_path=dest_path
+        )
     except HTTPException:
         # Re-raise HTTP exceptions (validation errors)
         raise
@@ -150,40 +174,74 @@ async def process_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=error_msg)
 
 
-@router.post("/insert-content-list", response_model=InsertResponse)
-async def insert_content_list(req: InsertContentListRequest):
+@router.post("/process-excel", response_model=ExcelProcessingResponse)
+async def process_excel_file(
+    file: UploadFile = File(...),
+    max_rows: Optional[int] = None,
+    sheet_name: Union[str, int] = 0,
+    convert_to_text: bool = True,
+    include_summary: bool = True,
+    chunk_size: int = 100,
+    doc_id: Optional[str] = None
+):
+    """Process Excel file and insert into RAG system"""
     rag = await get_rag()
-
-    # Validate content_list structure
-    if not req.content_list:
-        raise HTTPException(status_code=400, detail="content_list cannot be empty")
     
-    # Validate each content item
-    for i, item in enumerate(req.content_list):
-        if not item.type:
-            raise HTTPException(status_code=400, detail=f"content_list[{i}]: type field is required")
-        
-        # Validate content based on type
-        if item.type == "text" and not item.text:
-            raise HTTPException(status_code=400, detail=f"content_list[{i}]: text field is required for type 'text'")
-        elif item.type == "table" and not item.table_body:
-            raise HTTPException(status_code=400, detail=f"content_list[{i}]: table_body field is required for type 'table'")
-        elif item.type == "equation" and not item.latex:
-            raise HTTPException(status_code=400, detail=f"content_list[{i}]: latex field is required for type 'equation'")
-        elif item.type == "image" and not item.img_path:
-            raise HTTPException(status_code=400, detail=f"content_list[{i}]: img_path field is required for type 'image'")
-
-    # Convert Pydantic models to plain dicts
-    content_list = [item.model_dump() for item in req.content_list]
-    doc_id = req.doc_id or f"api-doc-{uuid.uuid4()}"
+    # Validate file extension
+    if not file.filename.lower().endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported")
+    
+    # Save uploaded file to a temp path inside working directory
+    working_dir = rag.config.working_dir
+    os.makedirs(working_dir, exist_ok=True)
+    dest_path = os.path.join(working_dir, file.filename)
 
     try:
-        await rag.insert_content_list(
-            content_list=content_list,
-            file_path=req.file_path,
-            doc_id=doc_id,
-            display_stats=req.display_stats,
+        with open(dest_path, "wb") as f:
+            f.write(await file.read())
+        
+        # Process Excel file using RAGAnything's Excel processor
+        result = await rag.process_excel_file(
+            file_path=dest_path,
+            max_rows=max_rows,
+            convert_to_text=convert_to_text,
+            include_summary=include_summary,
+            chunk_size=chunk_size,
+            doc_id=doc_id or f"excel-{uuid.uuid4()}"
         )
-        return InsertResponse(success=True, doc_id=doc_id)
+        
+        # Ensure ALL data is properly serialized before creating the response
+        result = serialize_for_json(result)
+        
+        if result["success"]:
+            # Convert numpy types to Python types for Pydantic serialization
+            total_rows = int(result["total_rows"]) if result.get("total_rows") is not None else 0
+            chunks_created = int(result["chunks_created"]) if result.get("chunks_created") is not None else 0
+            columns = [str(col) for col in result.get("columns", [])]
+            metadata = result.get("metadata") if result.get("metadata") else None
+            
+            return ExcelProcessingResponse(
+                success=True,
+                doc_id=result["doc_id"],
+                total_rows=total_rows,
+                columns=columns,
+                chunks_created=chunks_created,
+                metadata=metadata
+            )
+        else:
+            raise HTTPException(status_code=500, detail=f"Excel processing failed: {result['error']}")
+            
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Content insertion failed: {str(e)}")
+        # Handle other processing errors
+        error_msg = f"Excel file processing failed: {str(e)}"
+        raise HTTPException(status_code=500, detail=error_msg)
+    finally:
+        # Clean up uploaded file
+        if os.path.exists(dest_path):
+            try:
+                os.remove(dest_path)
+            except Exception:
+                pass  # Ignore cleanup errors

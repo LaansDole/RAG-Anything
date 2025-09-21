@@ -67,7 +67,9 @@ download_models_hf.py
 lightrag-dev/
 gui/
 **/service/datasets/service_examples_*
-WARP.md
+AGENTS.md
+.roo/
+qdrant_storage/
 
 # unit-test files
 test_*

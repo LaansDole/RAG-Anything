@@ -1011,9 +1011,11 @@ python examples/text_format_test.py --check-reportlab --file dummy
 
 ---
 
-## 🧩 FastAPI Service (Local UI Backend)
+## 🧩 FastAPI Service & Streamlit UI
 
-Spin up a minimal API server to query and process documents using RAG-Anything with LM Studio. This is handy for hooking up a simple UI.
+### FastAPI Service (Backend)
+
+Spin up a minimal API server to query and process documents using RAG-Anything with LM Studio.
 
 Quick start (using uv):
 
@@ -1022,10 +1024,59 @@ Quick start (using uv):
 uv add fastapi uvicorn[standard]
 
 # Run the server (reload for dev)
-uv run uvicorn service.app:app --reload
+uv run uvicorn api.app:app --reload
+# or using make
+make server
 ```
 
-For more details, see `service/README.md`.
+### 🎨 Streamlit Web Interface (Frontend)
+
+A comprehensive web interface for the RAG-Anything service providing an intuitive way to upload documents, configure processing parameters, and query your data with natural language.
+
+**Key Features:**
+- 📁 **Document Upload & Processing** - Support for PDF, Word, PowerPoint, Excel, text files, and images
+- 🔍 **Intelligent Querying** - Natural language queries with multiple modes (hybrid, local, global, naive)
+- 🖼️ **Multimodal Support** - Enhanced queries with text and image content
+- 📊 **Real-time Processing** - Live progress indicators and status updates
+- 📈 **Analytics Dashboard** - File processing statistics and query performance metrics
+
+**Quick Start:**
+
+```bash
+# Install UI dependencies
+uv sync --extra ui
+# or
+pip install raganything[ui]
+
+# Start the RAG service
+make server
+
+# In another terminal, start the Streamlit UI
+make ui
+# or
+uv run streamlit run ui/streamlit_app.py
+```
+
+The Streamlit interface will be available at `http://localhost:8501`
+
+**Usage:**
+1. Open the Streamlit interface
+2. Configure service connection (default: `http://localhost:8000`)
+3. Upload and process documents via the intuitive web interface
+4. Query your documents using natural language
+5. View analytics and query history
+
+For detailed setup instructions, see [`ui/README.md`](ui/README.md).
+
+**Available Make Commands:**
+```bash
+make server      # Start RAGAnything API service
+make ui          # Start Streamlit web interface
+make dev         # Start both services simultaneously
+make test        # Run integration tests
+make install-ui  # Install UI dependencies
+make stop        # Stop all running services
+```
 
 ---
 

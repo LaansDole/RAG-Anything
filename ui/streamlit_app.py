@@ -628,9 +628,6 @@ def render_query_interface():
                     mime="text/plain"
                 )
     
-    # Chat history display
-    st.markdown("### 💬 Conversation")
-    
     chat_container = st.container()
     with chat_container:
         if st.session_state.chat_history:
@@ -786,7 +783,7 @@ def render_query_results(query_result: Dict[str, Any]):
 
 def render_query_history():
     """Render query history"""
-    st.markdown('<h2 class="main-header">📚 Query History</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="main-header">Query History</h2>', unsafe_allow_html=True)
     
     if not st.session_state.query_history:
         st.info("No queries executed yet. Go to the Query tab to start asking questions!")
@@ -806,7 +803,7 @@ def render_query_history():
 
 def render_analytics():
     """Render analytics and statistics"""
-    st.markdown('<h2 class="main-header">📈 Analytics</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="main-header">Analytics</h2>', unsafe_allow_html=True)
     
     # File processing statistics
     if st.session_state.uploaded_files:

@@ -187,7 +187,7 @@ def upload_and_process_file(file, service_url: str, file_type: str) -> Dict[str,
         
         # Determine endpoint based on file type
         if file_type in ['.xlsx', '.xls']:
-            endpoint = f"{service_url}/process-excel"
+            endpoint = f"{service_url}/process-file"
             files = {'file': (file.name, file.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
             data = {
                 'max_rows': st.session_state.get('excel_max_rows', 500),
@@ -592,7 +592,7 @@ def render_chat_message(message: Dict[str, Any], is_user: bool = True):
                         border-radius: 15px 15px 15px 5px; max-width: 80%;
                         border-left: 4px solid {border_color}; word-wrap: break-word;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <strong>🤖 RAG Assistant:</strong>
+                    <strong>Assistant:</strong>
                     <small style="color: #666;">{timestamp}</small>
                 </div>
                 {content}

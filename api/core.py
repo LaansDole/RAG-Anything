@@ -19,7 +19,7 @@ rag_instance: Optional[RAGAnything] = None
 # Concurrency limiter and timeout for LM Studio calls
 LLM_MAX_CONCURRENCY = int(os.getenv("LLM_MAX_CONCURRENCY", "4"))
 _LLM_SEMAPHORE = asyncio.Semaphore(LLM_MAX_CONCURRENCY)
-LLM_REQUEST_TIMEOUT = float(os.getenv("LLM_REQUEST_TIMEOUT", "60"))  # seconds
+LLM_REQUEST_TIMEOUT = float(os.getenv("LLM_REQUEST_TIMEOUT", "120"))  # seconds
 
 
 async def lmstudio_llm_model_func(
@@ -84,10 +84,10 @@ async def lmstudio_llm_model_func(
                 },
             },
         }
-        # Deterministic decoding to reduce parse issues
-        call_kwargs.setdefault("temperature", 0.1)
-        call_kwargs.setdefault("top_p", 0.0)
-        call_kwargs.setdefault("max_tokens", 512)  # Reduced for LM Studio compatibility
+        # # Deterministic decoding to reduce parse issues
+        # call_kwargs.setdefault("temperature", 0.1)
+        # call_kwargs.setdefault("top_p", 0.0)
+        # call_kwargs.setdefault("max_tokens", 512) 
 
     # Retry with exponential backoff; drop response_format if backend rejects it
     last_err = None

@@ -205,7 +205,7 @@ def upload_and_process_file(file, service_url: str, file_type: str) -> Dict[str,
             files = {'file': (file.name, file.getvalue(), 'application/octet-stream')}
             data = {}
         
-        response = requests.post(endpoint, files=files, data=data, timeout=300)
+        response = requests.post(endpoint, files=files, data=data, timeout=600)
         
         # Handle specific HTTP status codes
         if response.status_code == 200:
@@ -285,7 +285,7 @@ def _try_multimodal_query(query: str, service_url: str, mode: str,
             "multimodal_content": filtered_content
         }
         
-        response = requests.post(f"{service_url}/query-multimodal", json=payload, timeout=300)
+        response = requests.post(f"{service_url}/query-multimodal", json=payload, timeout=600)
         
         if response.status_code == 200:
             result = response.json()
@@ -310,7 +310,7 @@ def _try_standard_query(query: str, service_url: str, mode: str) -> Dict[str, An
             "mode": mode
         }
         
-        response = requests.post(f"{service_url}/query", json=payload, timeout=300)
+        response = requests.post(f"{service_url}/query", json=payload, timeout=600)
         
         if response.status_code == 200:
             # Validate JSON response

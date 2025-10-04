@@ -20,6 +20,7 @@ from typing import Dict, List, Any
 # Configuration
 DEFAULT_SERVICE_URL = "http://localhost:8000"
 MAX_FILE_SIZE_MB = 100  # Maximum file size in MB
+ENABLE_EXCEL_PROCESSING = False  # Enable Excel-specific processing options
 
 # API-compatible file types (removed images as API has enable_image_processing=False)
 SUPPORTED_FILE_TYPES = {
@@ -191,7 +192,8 @@ def upload_and_process_file(file, service_url: str, file_type: str) -> Dict[str,
             }
 
         # Determine endpoint based on file type
-        if file_type in [".xlsx", ".xls", ".csv"]:
+        # This endpoint will require more power for Excel processing and may take longer
+        if file_type in [".xlsx", ".xls", ".csv"] and ENABLE_EXCEL_PROCESSING:
             endpoint = f"{service_url}/process-excel"
             files = {
                 "file": (

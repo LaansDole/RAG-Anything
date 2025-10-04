@@ -14,17 +14,18 @@ import asyncio
 import atexit
 from dataclasses import dataclass, field
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Add project root directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from lightrag import LightRAG
-from lightrag.utils import logger
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
+# Load environment variables from .env file BEFORE importing LightRAG
+# This is critical for TIKTOKEN_CACHE_DIR to work properly in offline environments
 # The OS environment variables take precedence over the .env file
 load_dotenv(dotenv_path=".env", override=False)
+
+from lightrag import LightRAG
+from lightrag.utils import logger
 
 # Import configuration and modules
 from raganything.config import RAGAnythingConfig
@@ -580,26 +581,26 @@ class RAGAnything(QueryMixin, ProcessorMixin, BatchMixin):
         convert_to_text: bool = True,
         include_summary: bool = True,
         chunk_size: int = 100,
-        doc_id: Optional[str] = None
+        doc_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Process Excel file using pandas and insert into RAGAnything
-        
+
         This method provides a convenient way to process Excel files directly
         without going through the document parsing pipeline.
-        
+
         """
         try:
             excel_config = ExcelProcessingConfig(
                 max_rows=max_rows,
                 convert_to_text=convert_to_text,
                 include_summary=include_summary,
-                chunk_size=chunk_size
+                chunk_size=chunk_size,
             )
-            
+
             integration = ExcelRAGIntegration(self, excel_config)
             return await integration.process_excel_file(file_path, doc_id)
-            
+
         except Exception as e:
             error_msg = f"Error in process_excel_file: {str(e)}"
             self.logger.error(error_msg, exc_info=True)
@@ -607,29 +608,29 @@ class RAGAnything(QueryMixin, ProcessorMixin, BatchMixin):
 
     async def process_dataframe(
         self,
-        df: "pd.DataFrame",
+        df: Any,
         doc_id: str,
         convert_to_text: bool = True,
         include_summary: bool = True,
-        chunk_size: int = 100
+        chunk_size: int = 100,
     ) -> Dict[str, Any]:
         """
         Process a pandas DataFrame directly and insert into RAGAnything
-        
+
         This method allows you to process DataFrames that you've already loaded
         and potentially modified with pandas operations.
-        
+
         """
         try:
             excel_config = ExcelProcessingConfig(
                 convert_to_text=convert_to_text,
                 include_summary=include_summary,
-                chunk_size=chunk_size
+                chunk_size=chunk_size,
             )
-            
+
             integration = ExcelRAGIntegration(self, excel_config)
             return await integration.process_dataframe_directly(df, doc_id)
-            
+
         except Exception as e:
             error_msg = f"Error in process_dataframe: {str(e)}"
             self.logger.error(error_msg, exc_info=True)

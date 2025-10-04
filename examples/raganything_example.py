@@ -119,13 +119,17 @@ async def process_with_rag(
         def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
             # Get model name from environment or use default
             model_name = os.getenv("LLM_MODEL", "openai/gpt-oss-20b")
-            
+
             # Filter out parameters that LM Studio doesn't support
             call_kwargs = dict(kwargs)
-            lmstudio_incompatible_params = ['stream', 'stream_options', 'parallel_tool_calls']
+            lmstudio_incompatible_params = [
+                "stream",
+                "stream_options",
+                "parallel_tool_calls",
+            ]
             for param in lmstudio_incompatible_params:
                 call_kwargs.pop(param, None)
-            
+
             return openai_complete_if_cache(
                 model_name,
                 prompt,
@@ -147,13 +151,17 @@ async def process_with_rag(
         ):
             # Get model name from environment or use default
             model_name = os.getenv("LLM_MODEL", "openai/gpt-oss-20b")
-            
+
             # Filter out parameters that LM Studio doesn't support
             call_kwargs = dict(kwargs)
-            lmstudio_incompatible_params = ['stream', 'stream_options', 'parallel_tool_calls']
+            lmstudio_incompatible_params = [
+                "stream",
+                "stream_options",
+                "parallel_tool_calls",
+            ]
             for param in lmstudio_incompatible_params:
                 call_kwargs.pop(param, None)
-            
+
             # If messages format is provided (for multimodal VLM enhanced query), use it directly
             if messages:
                 return openai_complete_if_cache(
@@ -201,7 +209,9 @@ async def process_with_rag(
                 return llm_model_func(prompt, system_prompt, history_messages, **kwargs)
 
         # Define embedding function for LM Studio
-        embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-embeddinggemma-300m")
+        embedding_model = os.getenv(
+            "EMBEDDING_MODEL", "text-embedding-embeddinggemma-300m"
+        )
         embedding_dim = int(os.getenv("EMBEDDING_DIM", "768"))
         embedding_base_url = os.getenv("EMBEDDING_BINDING_HOST", base_url)
         embedding_api_key = os.getenv("EMBEDDING_BINDING_API_KEY", api_key)
@@ -317,7 +327,9 @@ def main():
     # Check if API key is provided
     if not args.api_key:
         logger.error("Error: LM Studio API key is required")
-        logger.error("Set LLM_BINDING_API_KEY environment variable or use --api-key option")
+        logger.error(
+            "Set LLM_BINDING_API_KEY environment variable or use --api-key option"
+        )
         return
 
     # Create output directory if specified

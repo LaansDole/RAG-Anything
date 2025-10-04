@@ -70,6 +70,7 @@ gui/
 AGENTS.md
 .roo/
 qdrant_storage/
+tiktoken_cache/
 
 # unit-test files
 test_*

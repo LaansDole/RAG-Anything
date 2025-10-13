@@ -11,7 +11,7 @@ LM_BASE_URL = os.getenv("LLM_BINDING_HOST", "http://localhost:1234/v1")
 LM_API_KEY = os.getenv("LLM_BINDING_API_KEY", "lm-studio")
 LM_MODEL_NAME = os.getenv("LLM_MODEL", "openai/gpt-oss-20b")
 LM_EMBED_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-embeddinggemma-300m")
-LM_EMBED_BASE_URL = os.getenv("EMBEDDING_BINDING_HOST", "http://localhost:1234/v1") 
+LM_EMBED_BASE_URL = os.getenv("EMBEDDING_BINDING_HOST", "http://localhost:1234/v1")
 LM_EMBED_API_KEY = os.getenv("EMBEDDING_BINDING_API_KEY", "lm-studio")
 
 rag_instance: Optional[RAGAnything] = None
@@ -48,12 +48,12 @@ async def lmstudio_llm_model_func(
         wants_json = True
 
     call_kwargs = dict(kwargs)
-    
+
     # Filter out parameters that LM Studio doesn't support
-    lmstudio_incompatible_params = ['stream', 'stream_options', 'parallel_tool_calls']
+    lmstudio_incompatible_params = ["stream", "stream_options", "parallel_tool_calls"]
     for param in lmstudio_incompatible_params:
         call_kwargs.pop(param, None)
-    
+
     if wants_json:
         # Nudge for strict JSON fields
         system_prompt = (system_prompt or "") + (
@@ -87,7 +87,7 @@ async def lmstudio_llm_model_func(
         # # Deterministic decoding to reduce parse issues
         # call_kwargs.setdefault("temperature", 0.1)
         # call_kwargs.setdefault("top_p", 0.0)
-        # call_kwargs.setdefault("max_tokens", 512) 
+        # call_kwargs.setdefault("max_tokens", 512)
 
     # Retry with exponential backoff; drop response_format if backend rejects it
     last_err = None
@@ -107,8 +107,14 @@ async def lmstudio_llm_model_func(
         except Exception as e:
             msg = str(e)
             # Handle various LM Studio compatibility issues
-            if wants_json and call_kwargs.get("response_format") is not None and (
-                "response_format" in msg or "json_schema" in msg or "must be 'json_schema' or 'text'" in msg
+            if (
+                wants_json
+                and call_kwargs.get("response_format") is not None
+                and (
+                    "response_format" in msg
+                    or "json_schema" in msg
+                    or "must be 'json_schema' or 'text'" in msg
+                )
             ):
                 # Remove response_format and retry
                 call_kwargs.pop("response_format", None)
@@ -119,13 +125,13 @@ async def lmstudio_llm_model_func(
                 if "stream" in msg:
                     call_kwargs.pop("stream", None)
                 if "stream_options" in msg:
-                    call_kwargs.pop("stream_options", None) 
+                    call_kwargs.pop("stream_options", None)
                 if "parallel_tool_calls" in msg:
                     call_kwargs.pop("parallel_tool_calls", None)
                 await asyncio.sleep(0.25)
                 continue
             last_err = e
-            await asyncio.sleep(0.5 * (2 ** attempt))
+            await asyncio.sleep(0.5 * (2**attempt))
     raise last_err
 
 
@@ -164,7 +170,7 @@ async def get_rag() -> RAGAnything:
         parser="mineru",
         parse_method="auto",
         enable_image_processing=False,  # Disabled - focus on Office documents only
-        enable_table_processing=True,   # Keep for Excel/Office table processing
+        enable_table_processing=True,  # Keep for Excel/Office table processing
         enable_equation_processing=False,  # Disabled - not needed for Office docs
     )
 

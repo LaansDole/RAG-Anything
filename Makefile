@@ -14,7 +14,7 @@ install-ui:
 dev:
 	@echo "Starting RAGAnything development environment..."
 	@echo "1. Starting API server..."
-	@uv run uvicorn api.app:app --reload &
+	@uv run uvicorn api.app:app &
 	@sleep 3
 	@echo "2. Starting Streamlit UI..."
 	@uv run streamlit run ui/streamlit_app.py

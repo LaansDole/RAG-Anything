@@ -18,10 +18,6 @@ uv sync --all-extras
 First, ensure the RAGAnything service is running:
 
 ```bash
-# Using make (recommended)
-make server
-
-# Or directly with uv
 uv run uvicorn api.app:app --reload
 
 # Or with uvicorn
@@ -39,7 +35,13 @@ streamlit run streamlit_app.py
 uv run streamlit run streamlit_app.py
 ```
 
-The UI will be available at `http://localhost:8501`
+### Alternatively
+```
+# Start the service and UI
+make dev
+```
+
+The UI will be available at `http://localhost:8501`.
 
 ### 3. Configure Service Connection
 1. Open the Streamlit interface

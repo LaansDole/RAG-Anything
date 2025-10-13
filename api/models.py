@@ -14,7 +14,7 @@ class MultimodalQueryRequest(BaseModel):
 
 
 class QueryResponse(BaseModel):
-    result: str
+    result: Union[str, dict]  # Can be either a string or structured JSON response
 
 
 # Excel Processing Models

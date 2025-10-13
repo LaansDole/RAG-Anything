@@ -599,7 +599,7 @@ def render_chat_message(message: Dict[str, Any], is_user: bool = True):
             <div style="background-color: #007bff; color: white; padding: 0.75rem 1rem;
                         border-radius: 15px 15px 5px 15px; max-width: 70%;
                         word-wrap: break-word;">
-                <strong>You:</strong><br>{message['content']}
+                <strong>You:</strong><br>{message["content"]}
             </div>
         </div>
         """,
@@ -612,14 +612,52 @@ def render_chat_message(message: Dict[str, Any], is_user: bool = True):
         )
         status = message.get("status", "success")
 
+        content_html = ""
         if status == "success":
             color = "#f8f9fa"
             border_color = "#28a745"
-            content = message["content"]
+            content_data = message["content"]
+
+            if (
+                isinstance(content_data, dict)
+                and "detailed_description" in content_data
+            ):
+                detailed_description = content_data.get("detailed_description", "")
+                entity_info = content_data.get("entity_info", {})
+                summary = entity_info.get("summary", "")
+                entity_name = entity_info.get("entity_name", "")
+                entity_type = entity_info.get("entity_type", "")
+
+                entity_html = ""
+                if entity_name and entity_type:
+                    entity_html = f'<div style="font-size: 0.9rem; color: #666; margin-bottom: 0.75rem; padding: 0.5rem; background-color: #e9ecef; border-radius: 4px;"><b>Document:</b> {entity_name} </div>'
+
+                # Format detailed description with better typography
+                formatted_description = detailed_description.replace("\n", "<br>")
+                description_html = f'<div style="line-height: 1.6; margin-bottom: 1rem; text-align: justify;">{formatted_description}</div>'
+
+                summary_html = ""
+                if summary:
+                    # Using <details> for a dropdown/expander with better styling
+                    formatted_summary = summary.replace("\n", "<br>")
+                    summary_html = (
+                        '<details style="margin-top: 1rem; border: 1px solid #dee2e6; border-radius: 6px; padding: 0.75rem; background-color: #f8f9fa;">'
+                        '<summary style="cursor: pointer; font-weight: bold; color: #495057; padding: 0.25rem 0;">📋 View Summary</summary>'
+                        f'<div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid #e9ecef; line-height: 1.5; color: #343a40;">{formatted_summary}</div>'
+                        "</details>"
+                    )
+
+                # Combine entity info, detailed description, and summary dropdown
+                content_html = f"{entity_html}{description_html}{summary_html}"
+            else:
+                # Fallback for old string format or unexpected dict
+                content_html = (
+                    f"<div style='line-height: 1.6;'>{str(content_data)}</div>"
+                )
         else:
             color = "#f8d7da"
             border_color = "#dc3545"
-            content = f"❌ Error: {message['content']}"
+            content_html = f"❌ Error: {message['content']}"
 
         st.markdown(
             f"""
@@ -631,7 +669,7 @@ def render_chat_message(message: Dict[str, Any], is_user: bool = True):
                     <strong>Assistant:</strong>
                     <small style="color: #666;">{timestamp}</small>
                 </div>
-                {content}
+                {content_html}
             </div>
         </div>
         """,
@@ -693,27 +731,8 @@ def render_query_interface():
     #     else:
     #         st.session_state.multimodal_content = []
 
-    # Use current_message if set by quick actions
-    default_message = st.session_state.get("current_message", "")
-    if default_message:
-        st.session_state.current_message = ""  # Clear after use
-
-    user_input = st.text_area(
-        "Type your question:",
-        height=100,
-        placeholder="Ask me anything about your documents...",
-        value=default_message,
-        help="Ask questions about content, request summaries, or seek insights from your documents",
-    )
-
-    # Send button
-    send_col1, send_col2 = st.columns([3, 1])
-
-    with send_col2:
-        send_button = st.button("📤 Send", type="primary", use_container_width=True)
-
-    # Process message
-    if send_button and user_input.strip():
+    # Use st.chat_input for a more intuitive chat experience
+    if user_input := st.chat_input("Ask me anything about your documents..."):
         if not st.session_state.service_connected:
             st.error("❌ Please connect to the service first!")
             return
@@ -737,12 +756,28 @@ def render_query_interface():
 
             # Add assistant response to chat
             if result["status"] == "success":
+                # Parse the API response - it can be either string or structured JSON
+                api_result = result.get(
+                    "result",
+                    "I received your question but couldn't generate a response.",
+                )
+
+                # Check if the API returned structured JSON data
+                if (
+                    isinstance(api_result, dict)
+                    and "detailed_description" in api_result
+                ):
+                    response_content = api_result
+                elif isinstance(api_result, dict) and "result" in api_result:
+                    # Handle nested result structure
+                    response_content = api_result["result"]
+                else:
+                    # Handle simple string response
+                    response_content = api_result
+
                 assistant_message = {
                     "role": "assistant",
-                    "content": result.get(
-                        "result",
-                        "I received your question but couldn't generate a response.",
-                    ),
+                    "content": response_content,
                     "timestamp": time.time(),
                     "status": "success",
                     "mode": mode,
@@ -828,7 +863,42 @@ def render_query_results(query_result: Dict[str, Any]):
     if result["status"] == "success":
         st.markdown('<div class="success-box">', unsafe_allow_html=True)
         st.markdown("**Answer:**")
-        st.markdown(result.get("result", "No answer provided"))
+
+        # Parse the API response - it can be either string or structured JSON
+        api_result = result.get("result", "No answer provided")
+
+        # Check if the API returned structured JSON data
+        if isinstance(api_result, dict) and "detailed_description" in api_result:
+            content_data = api_result
+        elif isinstance(api_result, dict) and "result" in api_result:
+            # Handle nested result structure
+            content_data = api_result["result"]
+        else:
+            # Handle simple string response
+            content_data = api_result
+
+        if isinstance(content_data, dict) and "detailed_description" in content_data:
+            detailed_description = content_data.get("detailed_description", "")
+            entity_info = content_data.get("entity_info", {})
+            summary = entity_info.get("summary", "")
+            entity_name = entity_info.get("entity_name", "")
+            entity_type = entity_info.get("entity_type", "")
+
+            # Display entity info with styling
+            if entity_name and entity_type:
+                st.info(f"📊 **Entity:** {entity_name} _{entity_type}_")
+
+            # Display detailed description with better formatting
+            st.markdown("**Detailed Analysis:**")
+            st.markdown(detailed_description)
+
+            # Display summary in expander dropdown
+            if summary:
+                with st.expander("📋 **View Summary**"):
+                    st.markdown(summary)
+        else:
+            st.markdown(str(content_data))
+
         st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.markdown('<div class="error-box">', unsafe_allow_html=True)
@@ -891,12 +961,12 @@ def render_analytics():
 
         with col3:
             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Success Rate", f"{(processed_count/total_count*100):.1f}%")
+            st.metric("Success Rate", f"{(processed_count / total_count * 100):.1f}%")
             st.markdown("</div>", unsafe_allow_html=True)
 
         with col4:
             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Total Size", f"{total_size/1024:.1f} KB")
+            st.metric("Total Size", f"{total_size / 1024:.1f} KB")
             st.markdown("</div>", unsafe_allow_html=True)
 
         # File details table
@@ -907,7 +977,7 @@ def render_analytics():
                 {
                     "File Name": file_info["name"],
                     "Type": file_info["type"],
-                    "Size (KB)": f"{file_info['size']/1024:.1f}",
+                    "Size (KB)": f"{file_info['size'] / 1024:.1f}",
                     "Status": "✅ Processed" if file_info["processed"] else "❌ Failed",
                     "Details": file_info["result"].get("message", "")
                     if not file_info["processed"]
@@ -942,7 +1012,9 @@ def render_analytics():
 
         with col2:
             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Success Rate", f"{(successful_queries/total_queries*100):.1f}%")
+            st.metric(
+                "Success Rate", f"{(successful_queries / total_queries * 100):.1f}%"
+            )
             st.markdown("</div>", unsafe_allow_html=True)
 
         with col3:

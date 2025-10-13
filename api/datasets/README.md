@@ -15,7 +15,7 @@ Perfect for quick testing and prototype development:
 
 2. **`patient_records_small.xlsx`** - Anonymized patient summary data
    - Size: ~200 records
-   - Format: Excel (.xlsx) 
+   - Format: Excel (.xlsx)
    - Source: Synthetic patient demographics and conditions
    - Use case: Patient information retrieval, clinical decision support
 
@@ -57,7 +57,7 @@ import pandas as pd
 symptoms_df = pd.read_excel('service/datasets/medical_symptoms_small.xlsx')
 print(f"Symptoms dataset: {len(symptoms_df)} rows")
 
-# Load patient records dataset  
+# Load patient records dataset
 patients_df = pd.read_excel('service/datasets/patient_records_small.xlsx')
 print(f"Patient records: {len(patients_df)} rows")
 ```
@@ -88,12 +88,12 @@ async def process_medical_csv():
         working_dir="./rag_storage_medical",
         enable_table_processing=True,
     )
-    
+
     rag = RAGAnything(config=config, ...)
-    
+
     # Load CSV as content list
     df = pd.read_csv('service/datasets/medical_abstracts_medium.csv')
-    
+
     content_list = []
     for idx, row in df.iterrows():
         content_list.append({
@@ -101,13 +101,13 @@ async def process_medical_csv():
             "text": f"Title: {row['title']}\nAbstract: {row['abstract']}",
             "page_idx": idx
         })
-    
+
     # Insert into RAG system
     await rag.insert_content_list(
         content_list=content_list,
         file_path="medical_abstracts_medium.csv"
     )
-    
+
     # Query the medical knowledge
     result = await rag.aquery(
         "What are the latest treatments for cardiovascular disease?",
@@ -121,13 +121,13 @@ async def process_medical_csv():
 async def process_medical_excel():
     # Initialize RAG-Anything
     rag = RAGAnything(config=config, ...)
-    
+
     # Load Excel as structured table
     df = pd.read_excel('service/datasets/medical_symptoms_small.xlsx')
-    
+
     # Convert DataFrame to markdown table for better RAG processing
     table_markdown = df.to_markdown(index=False)
-    
+
     content_list = [{
         "type": "table",
         "table_body": table_markdown,
@@ -135,13 +135,13 @@ async def process_medical_excel():
         "table_footnote": ["Source: Synthetic medical triage data"],
         "page_idx": 0
     }]
-    
+
     # Insert structured table into RAG
     await rag.insert_content_list(
         content_list=content_list,
         file_path="medical_symptoms_small.xlsx"
     )
-    
+
     # Query with table awareness
     result = await rag.aquery(
         "What symptoms are associated with respiratory conditions?",
@@ -207,7 +207,7 @@ Columns:
 # Symptom-based queries
 await rag.aquery("What are the emergency symptoms that require immediate attention?")
 
-# Treatment research queries  
+# Treatment research queries
 await rag.aquery("Find clinical trials for diabetes treatment in adults")
 
 # Condition-specific queries
@@ -223,7 +223,7 @@ await rag.aquery("Compare treatment outcomes for patients with multiple comorbid
 await rag.aquery_with_multimodal(
     "Analyze this symptom data in context of the medical literature",
     multimodal_content=[{
-        "type": "table", 
+        "type": "table",
         "table_data": symptoms_df.head(10).to_csv(),
         "table_caption": "Patient symptom analysis"
     }]
@@ -235,7 +235,7 @@ await rag.aquery_with_multimodal(
 service/datasets/
 ├── README.md                          # This documentation
 ├── medical_symptoms_small.xlsx        # Small Excel: Symptom triage data
-├── patient_records_small.xlsx         # Small Excel: Patient summaries  
+├── patient_records_small.xlsx         # Small Excel: Patient summaries
 ├── medical_abstracts_medium.csv       # Medium CSV: Research abstracts
 ├── clinical_trials_medium.csv         # Medium CSV: Trial metadata
 └── examples/                          # Usage examples

@@ -24,3 +24,7 @@ stop:
 	@echo "Stopping all services..."
 	@pkill -f "uvicorn api.app:app" || true
 	@pkill -f "streamlit run ui/streamlit_app.py" || true
+
+.PHONY: lint
+lint:
+	uv run ruff check . --fix --ignore=E402

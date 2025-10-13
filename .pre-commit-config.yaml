@@ -10,6 +10,8 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.0
     hooks:
+      - id: ruff-check
+        args: [--fix, --ignore=E402]
       - id: ruff-format
 
 

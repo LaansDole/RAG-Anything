@@ -132,6 +132,40 @@ st.markdown(
         outline: none;
         box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
     }
+    .bubble-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin: 1rem 0;
+        padding: 1rem;
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        border: 1px solid #e9ecef;
+    }
+    /* Style for bubble question buttons */
+    div[data-testid="stHorizontalBlock"] > div:has(> button) {
+        margin: 0.25rem;
+    }
+    div[data-testid="stHorizontalBlock"] > div:has(> button) button {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border: 1px solid #dee2e6;
+        border-radius: 20px;
+        padding: 0.75rem 1.25rem;
+        font-size: 0.9rem;
+        color: #495057;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        white-space: normal;
+        height: auto;
+        line-height: 1.4;
+    }
+    div[data-testid="stHorizontalBlock"] > div:has(> button) button:hover {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        border-color: #667eea;
+    }
 </style>
 """,
     unsafe_allow_html=True,
@@ -157,6 +191,7 @@ def initialize_session_state():
         "current_message": "",
         "conversation_id": str(time.time()),
         "auto_scroll": True,
+        "processing_query": False,
     }
 
     for key, value in default_state.items():
@@ -689,8 +724,7 @@ def render_query_interface():
         )
         return
 
-    # Chat controls
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+    col1, col2 = st.columns([1, 1])
 
     with col1:
         if st.button("🗑️ Clear Chat", help="Clear conversation history"):
@@ -708,6 +742,51 @@ def render_query_interface():
                     file_name=f"rag_chat_{st.session_state.conversation_id}.txt",
                     mime="text/plain",
                 )
+            else:
+                st.warning("No chat history to export.")
+
+    # Define bubble questions
+    bubble_questions = [
+        "What are the key statistical trends in this dataset?",
+        "Which columns have the highest variance or most missing values?",
+        "Can you identify any outliers or anomalies in the data?",
+        "What actionable insights can be drawn from this dataset for medical decisions?",
+    ]
+
+    # Create columns for bubble questions
+    cols = st.columns(2)
+
+    for i, question in enumerate(bubble_questions):
+        with cols[i % 2]:
+            # Create a unique key for each button
+            button_key = f"bubble_question_{i}"
+
+            # Create a button that looks like a bubble
+            if st.button(
+                question,
+                key=button_key,
+                help="Click to send this question",
+                use_container_width=True,
+            ):
+                # Process the bubble question as if it was typed
+                if not st.session_state.service_connected:
+                    st.error("❌ Please connect to the service first!")
+                    return
+
+                # Add the bubble question to chat history
+                user_message = {
+                    "role": "user",
+                    "content": question,
+                    "timestamp": time.time(),
+                }
+                st.session_state.chat_history.append(user_message)
+
+                # Set processing state to show spinner
+                st.session_state.processing_query = True
+                st.rerun()
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
     chat_container = st.container()
     with chat_container:
@@ -717,6 +796,80 @@ def render_query_interface():
                     render_chat_message({"content": message["content"]}, is_user=True)
                 else:
                     render_chat_message(message, is_user=False)
+
+    # Processing indicator - always positioned under the chatbox
+    if st.session_state.get("processing_query", False):
+        with st.spinner("Thinking..."):
+            # Get the last user message to process
+            if (
+                st.session_state.chat_history
+                and st.session_state.chat_history[-1]["role"] == "user"
+            ):
+                last_user_message = st.session_state.chat_history[-1]
+                question = last_user_message["content"]
+
+                mode = st.session_state.get("query_mode", "hybrid")
+                multimodal = st.session_state.get("multimodal_content", [])
+
+                result = query_service(
+                    question, st.session_state.service_url, mode, multimodal
+                )
+
+                # Add assistant response to chat
+                if result["status"] == "success":
+                    # Parse the API response - it can be either string or structured JSON
+                    api_result = result.get(
+                        "result",
+                        "I received your question but couldn't generate a response.",
+                    )
+
+                    # Check if the API returned structured JSON data
+                    if (
+                        isinstance(api_result, dict)
+                        and "detailed_description" in api_result
+                    ):
+                        response_content = api_result
+                    elif isinstance(api_result, dict) and "result" in api_result:
+                        # Handle nested result structure
+                        response_content = api_result["result"]
+                    else:
+                        # Handle simple string response
+                        response_content = api_result
+
+                    assistant_message = {
+                        "role": "assistant",
+                        "content": response_content,
+                        "timestamp": time.time(),
+                        "status": "success",
+                        "mode": mode,
+                        "has_multimodal": len(multimodal) > 0,
+                    }
+                else:
+                    assistant_message = {
+                        "role": "assistant",
+                        "content": result.get("message", "An unknown error occurred."),
+                        "timestamp": time.time(),
+                        "status": "error",
+                        "mode": mode,
+                        "has_multimodal": len(multimodal) > 0,
+                    }
+
+                st.session_state.chat_history.append(assistant_message)
+
+                # Add to legacy query history for compatibility
+                st.session_state.query_history.append(
+                    {
+                        "query": question,
+                        "result": result,
+                        "timestamp": time.time(),
+                        "mode": mode,
+                        "has_multimodal": len(multimodal) > 0,
+                    }
+                )
+
+            # Clear processing state
+            st.session_state.processing_query = False
+            st.rerun()
 
     # Additional context section (collapsed by default)
     # with st.expander("📝 Add Additional Context (Optional)"):
@@ -745,70 +898,9 @@ def render_query_interface():
         }
         st.session_state.chat_history.append(user_message)
 
-        # Show processing indicator
-        with st.spinner("Thinking..."):
-            mode = st.session_state.get("query_mode", "hybrid")
-            multimodal = st.session_state.get("multimodal_content", [])
-
-            result = query_service(
-                user_input.strip(), st.session_state.service_url, mode, multimodal
-            )
-
-            # Add assistant response to chat
-            if result["status"] == "success":
-                # Parse the API response - it can be either string or structured JSON
-                api_result = result.get(
-                    "result",
-                    "I received your question but couldn't generate a response.",
-                )
-
-                # Check if the API returned structured JSON data
-                if (
-                    isinstance(api_result, dict)
-                    and "detailed_description" in api_result
-                ):
-                    response_content = api_result
-                elif isinstance(api_result, dict) and "result" in api_result:
-                    # Handle nested result structure
-                    response_content = api_result["result"]
-                else:
-                    # Handle simple string response
-                    response_content = api_result
-
-                assistant_message = {
-                    "role": "assistant",
-                    "content": response_content,
-                    "timestamp": time.time(),
-                    "status": "success",
-                    "mode": mode,
-                    "has_multimodal": len(multimodal) > 0,
-                }
-            else:
-                assistant_message = {
-                    "role": "assistant",
-                    "content": result.get("message", "An unknown error occurred."),
-                    "timestamp": time.time(),
-                    "status": "error",
-                    "mode": mode,
-                    "has_multimodal": len(multimodal) > 0,
-                }
-
-            st.session_state.chat_history.append(assistant_message)
-
-            # Add to legacy query history for compatibility
-            st.session_state.query_history.append(
-                {
-                    "query": user_input.strip(),
-                    "result": result,
-                    "timestamp": time.time(),
-                    "mode": mode,
-                    "has_multimodal": len(multimodal) > 0,
-                }
-            )
-
-        # Auto-scroll and refresh
-        if st.session_state.auto_scroll:
-            st.rerun()
+        # Set processing state to show spinner
+        st.session_state.processing_query = True
+        st.rerun()
 
 
 def generate_chat_export() -> str:
@@ -845,7 +937,6 @@ def generate_chat_export() -> str:
 
 def render_query_results(query_result: Dict[str, Any]):
     """Render query results with proper formatting"""
-    st.markdown("---")
     st.markdown("### 💬 Query Results")
 
     # Query info
@@ -861,7 +952,6 @@ def render_query_results(query_result: Dict[str, Any]):
     # Results
     result = query_result["result"]
     if result["status"] == "success":
-        st.markdown('<div class="success-box">', unsafe_allow_html=True)
         st.markdown("**Answer:**")
 
         # Parse the API response - it can be either string or structured JSON

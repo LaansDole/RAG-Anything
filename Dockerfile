@@ -1,5 +1,5 @@
 # Multi-stage build for RAG-Anything
-FROM python:3.10-slim as builder
+FROM python:3.10-slim AS builder
 
 # Set environment variables for non-interactive installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -28,7 +28,7 @@ COPY raganything/ ./raganything/
 RUN uv sync --frozen --extra ui --no-dev
 
 # Production stage
-FROM python:3.10-slim as production
+FROM python:3.10-slim AS production
 
 # Install runtime system dependencies
 # Only curl is needed for health checks; LibreOffice is external dependency

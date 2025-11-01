@@ -28,3 +28,11 @@ stop:
 .PHONY: lint
 lint:
 	uv run ruff check . --fix --ignore=E402
+
+.PHONY: docker-build
+docker-build:
+	@docker build -t raganything .
+
+.PHONY: docker
+docker: docker-build
+	@docker run -p 8000:8000 raganything

@@ -2,6 +2,13 @@
 mock:
 	uv run python api/core_endpoint_test.py api/datasets/medical_symptoms_small.xlsx
 
+.PHONY: server
+server:
+	@echo "Starting RAGAnything API server..."
+	@echo "Server will be available at http://localhost:8000"
+	@echo "Press Ctrl+C to gracefully stop the server"
+	uv run uvicorn api.app:app --reload
+
 .PHONY: ui
 ui:
 	uv run streamlit run ui/streamlit_app.py

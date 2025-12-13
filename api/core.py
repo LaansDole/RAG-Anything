@@ -1,6 +1,7 @@
 import os
 import uuid
 import asyncio
+import logging
 from typing import List, Optional
 
 from raganything import RAGAnything, RAGAnythingConfig
@@ -197,3 +198,22 @@ async def get_rag() -> RAGAnything:
         pass
 
     return rag_instance
+
+
+# Make logger available in core.py
+logger = logging.getLogger(__name__)
+
+
+async def cleanup_resources():
+    """Cleanup global RAG instance and resources"""
+    global rag_instance
+    if rag_instance is not None:
+        try:
+            # Finalize storages if the method exists
+            if hasattr(rag_instance, "lightrag") and rag_instance.lightrag:
+                from lightrag.utils import finalize_storages
+
+                await finalize_storages()
+            rag_instance = None
+        except Exception as e:
+            logger.error(f"Error cleaning up RAG instance: {e}")

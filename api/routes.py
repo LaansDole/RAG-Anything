@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Union, Optional
 import json
 import re
+import logging
 from fastapi import APIRouter, HTTPException, UploadFile, File
 
 from .core import get_rag
@@ -15,8 +16,10 @@ from .models import (
     ExcelProcessingResponse,
     FileProcessingResponse,
 )
+from .utils import check_shutdown, run_with_cancellation
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def serialize_for_json(obj):
@@ -131,7 +134,11 @@ def parse_structured_response(result: str) -> dict:
 async def query(req: QueryRequest):
     rag = await get_rag()
     try:
-        result = await rag.aquery(req.query, mode=req.mode)
+        # Wrap query with cancellation support
+        result = await run_with_cancellation(
+            rag.aquery(req.query, mode=req.mode),
+            description=f"Query: {req.query[:50]}...",
+        )
 
         # Parse the response to detect structured JSON
         structured_result = parse_structured_response(result)
@@ -152,23 +159,27 @@ async def query_multimodal(req: MultimodalQueryRequest):
     rag = await get_rag()
     try:
         # Enhanced logging for debugging
-        print(f"🔍 Multimodal query received: {req.query}")
-        print(f"📋 Mode: {req.mode}")
-        print(f"🎯 Multimodal content count: {len(req.multimodal_content)}")
+        logger.info(f"Multimodal query received: {req.query}")
+        logger.info(f"Mode: {req.mode}")
+        logger.info(f"Multimodal content count: {len(req.multimodal_content)}")
 
         # Log multimodal content structure for debugging
         if req.multimodal_content:
             for i, content in enumerate(req.multimodal_content):
-                print(f"  Content {i + 1}: {content}")
+                logger.info(f"Content {i + 1}: {content}")
         else:
-            print("  No multimodal content provided - will fallback to text query")
+            logger.info("No multimodal content provided - will fallback to text query")
 
         # For Office documents, we process structured content (tables, text) without images
-        result = await rag.aquery_with_multimodal(
-            req.query, multimodal_content=req.multimodal_content, mode=req.mode
+        # Wrap with cancellation support
+        result = await run_with_cancellation(
+            rag.aquery_with_multimodal(
+                req.query, multimodal_content=req.multimodal_content, mode=req.mode
+            ),
+            description=f"Multimodal query: {req.query[:50]}...",
         )
 
-        print("✅ Multimodal query completed successfully")
+        logger.info("Multimodal query completed successfully")
 
         # Parse the response to detect structured JSON
         structured_result = parse_structured_response(result)
@@ -182,19 +193,19 @@ async def query_multimodal(req: MultimodalQueryRequest):
 
     except AttributeError as e:
         error_msg = f"Method not available: aquery_with_multimodal() - {str(e)}"
-        print(f"❌ AttributeError: {error_msg}")
+        logger.error(f"AttributeError: {error_msg}")
         raise HTTPException(status_code=501, detail=error_msg)
     except TypeError as e:
         error_msg = f"Invalid parameters for aquery_with_multimodal(): {str(e)}"
-        print(f"❌ TypeError: {error_msg}")
+        logger.error(f"TypeError: {error_msg}")
         raise HTTPException(status_code=400, detail=error_msg)
     except Exception as e:
         error_msg = f"Multimodal query failed: {str(e)}"
-        print(f"❌ Exception: {error_msg}")
-        print(f"🔍 Exception type: {type(e).__name__}")
+        logger.error(f"Exception: {error_msg}")
+        logger.error(f"Exception type: {type(e).__name__}")
         import traceback
 
-        print(f"📍 Traceback: {traceback.format_exc()}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=error_msg)
 
 
@@ -208,6 +219,9 @@ async def process_file(file: UploadFile = File(...)):
     dest_path = os.path.join(working_dir, file.filename)
 
     try:
+        # Check for shutdown before file operations
+        await check_shutdown()
+
         with open(dest_path, "wb") as f:
             f.write(await file.read())
 
@@ -222,12 +236,21 @@ async def process_file(file: UploadFile = File(...)):
                 status_code=400, detail=f"Parser installation error: {str(e)}"
             )
 
-        await rag.process_document_complete(
-            file_path=dest_path,
-            output_dir=os.path.join(working_dir, "output"),
-            parse_method="auto",
-            display_stats=True,
+        logger.info(f"Starting document processing for {file.filename}")
+
+        # Wrap the long-running processing with cancellation support
+        await run_with_cancellation(
+            rag.process_document_complete(
+                file_path=dest_path,
+                output_dir=os.path.join(working_dir, "output"),
+                parse_method="auto",
+                display_stats=True,
+            ),
+            description=f"Document processing for {file.filename}",
         )
+
+        logger.info(f"Successfully processed document: {file.filename}")
+
         # Return success response with filename
         return FileProcessingResponse(
             success=True,
@@ -272,17 +295,25 @@ async def process_excel_file(
     dest_path = os.path.join(working_dir, file.filename)
 
     try:
+        # Check for shutdown before file operations
+        await check_shutdown()
+
         with open(dest_path, "wb") as f:
             f.write(await file.read())
 
-        # Process Excel file using RAGAnything's Excel processor
-        result = await rag.process_excel_file(
-            file_path=dest_path,
-            max_rows=max_rows,
-            convert_to_text=convert_to_text,
-            include_summary=include_summary,
-            chunk_size=chunk_size,
-            doc_id=doc_id or f"excel-{uuid.uuid4()}",
+        logger.info(f"Starting Excel processing for {file.filename}")
+
+        # Process Excel file using RAGAnything's Excel processor with cancellation support
+        result = await run_with_cancellation(
+            rag.process_excel_file(
+                file_path=dest_path,
+                max_rows=max_rows,
+                convert_to_text=convert_to_text,
+                include_summary=include_summary,
+                chunk_size=chunk_size,
+                doc_id=doc_id or f"excel-{uuid.uuid4()}",
+            ),
+            description=f"Excel processing for {file.filename}",
         )
 
         # Ensure ALL data is properly serialized before creating the response
@@ -300,6 +331,8 @@ async def process_excel_file(
             )
             columns = [str(col) for col in result.get("columns", [])]
             metadata = result.get("metadata") if result.get("metadata") else None
+
+            logger.info(f"Successfully processed Excel file: {file.filename}")
 
             return ExcelProcessingResponse(
                 success=True,

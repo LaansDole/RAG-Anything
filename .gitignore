@@ -66,11 +66,8 @@ LightRAG_2-4.pdf
 download_models_hf.py
 lightrag-dev/
 gui/
-**/service/datasets/service_examples_*
-AGENTS.md
-.roo/
-qdrant_storage/
 tiktoken_cache/
+uv.lock
 
 # unit-test files
 test_*

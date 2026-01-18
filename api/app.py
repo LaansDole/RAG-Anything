@@ -1,17 +1,22 @@
-import asyncio
-import signal
-import sys
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from .routes import router
-from .core import cleanup_resources
-from .utils import trigger_shutdown, cancel_all_background_tasks
+from .core import initialize_rag, cleanup_rag
+from .utils import cancel_all_background_tasks
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 
 
 @asynccontextmanager
@@ -19,50 +24,35 @@ async def lifespan(app: FastAPI):
     """Manage application lifespan with proper cleanup"""
     logger.info("RAG-Anything Service starting up...")
 
-    # Set up signal handlers for graceful shutdown
-    def handle_signal(signum, frame):
-        logger.info(f"Received signal {signum}, initiating graceful shutdown...")
-        trigger_shutdown()
-
-        # Schedule the cleanup
-        asyncio.create_task(cleanup_gracefully())
-
-    # Register signal handlers
-    if sys.platform != "win32":
-        signal.signal(signal.SIGTERM, handle_signal)
-        signal.signal(signal.SIGINT, handle_signal)
-    else:
-        # Windows signal handling
-        signal.signal(signal.SIGINT, handle_signal)
-        signal.signal(signal.SIGBREAK, handle_signal)
+    # Initialize RAG instance in app state
+    try:
+        app.state.rag_instance = await initialize_rag()
+        logger.info("RAG instance initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize RAG instance: {e}")
+        raise
 
     yield
 
-    logger.info("RAG-Anything Service shutdown complete")
-
-
-async def cleanup_gracefully():
-    """Cleanup resources gracefully"""
+    # Shutdown cleanup
+    logger.info("RAG-Anything Service shutting down...")
     try:
-        logger.info("Cleaning up resources...")
-
-        # Cancel all running tasks
+        # Cancel all background tasks
         await cancel_all_background_tasks()
 
-        # Cleanup core resources
-        await cleanup_resources()
+        # Cleanup RAG instance
+        await cleanup_rag(app.state.rag_instance)
 
-        logger.info("Graceful shutdown completed")
-
+        logger.info("RAG-Anything Service shutdown complete")
     except Exception as e:
-        logger.error(f"Error during graceful shutdown: {e}")
-
-    # Force exit if graceful shutdown takes too long
-    await asyncio.sleep(1)
-    sys.exit(0)
+        logger.error(f"Error during shutdown: {e}")
 
 
 app = FastAPI(title="RAG-Anything Service", version="0.1.0", lifespan=lifespan)
+
+# Add rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS for local UI dev
 app.add_middleware(
@@ -74,3 +64,9 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Redirect root path to API documentation"""
+    return RedirectResponse(url="/docs")

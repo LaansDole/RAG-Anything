@@ -1,6 +1,6 @@
-.PHONY: mock
-mock:
-	uv run python api/core_endpoint_test.py api/datasets/medical_symptoms_small.xlsx
+.PHONY: mock-test
+mock-test:
+	uv run python api/core_endpoint_test.py api/datasets/patient_records_small.xlsx
 
 .PHONY: server
 server:

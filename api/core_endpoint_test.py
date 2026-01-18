@@ -105,6 +105,7 @@ async def run_test(file_path: str):
     query = "Summarize the key information in this document."
     print(f"\nQuerying: {query}")
     try:
+        # Using hybrid mode with default top_k (assuming Qwen model with large context is used)
         response = await rag.aquery(query, mode="hybrid")
         print(f"Answer: {response}")
 

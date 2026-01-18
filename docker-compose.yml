@@ -36,20 +36,6 @@ services:
       start_period: 40s
     restart: unless-stopped
 
-  raganything-ui:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-    ports:
-      - "8501:8501"
-    environment:
-      - API_BASE_URL=http://raganything-api:8000
-    command: ["uv", "run", "streamlit", "run", "ui/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
-    depends_on:
-      - raganything-api
-    restart: unless-stopped
-
 volumes:
   rag_storage:
     driver: local

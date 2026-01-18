@@ -1014,7 +1014,7 @@ python examples/text_format_test.py --check-reportlab --file dummy
 
 ---
 
-## 🧩 FastAPI Service & Streamlit UI
+## FastAPI Service
 
 ### FastAPI Service (Backend)
 
@@ -1032,52 +1032,11 @@ uv run uvicorn api.app:app --reload
 make server
 ```
 
-### 🎨 Streamlit Web Interface (Frontend)
-
-A comprehensive web interface for the RAG-Anything service providing an intuitive way to upload documents, configure processing parameters, and query your data with natural language.
-
-**Key Features:**
-- 📁 **Document Upload & Processing** - Support for PDF, Word, PowerPoint, Excel, text files, and images
-- 🔍 **Intelligent Querying** - Natural language queries with multiple modes (hybrid, local, global, naive)
-- 🖼️ **Multimodal Support** - Enhanced queries with text and image content
-- 📊 **Real-time Processing** - Live progress indicators and status updates
-- 📈 **Analytics Dashboard** - File processing statistics and query performance metrics
-
-**Quick Start:**
-
-```bash
-# Install UI dependencies
-uv sync --extra ui
-# or
-pip install raganything[ui]
-
-# Start the RAG service
-make server
-
-# In another terminal, start the Streamlit UI
-make ui
-# or
-uv run streamlit run ui/streamlit_app.py
-```
-
-The Streamlit interface will be available at `http://localhost:8501`
-
-**Usage:**
-1. Open the Streamlit interface
-2. Configure service connection (default: `http://localhost:8000`)
-3. Upload and process documents via the intuitive web interface
-4. Query your documents using natural language
-5. View analytics and query history
-
-For detailed setup instructions, see [`ui/README.md`](ui/README.md).
-
 **Available Make Commands:**
 ```bash
 make server      # Start RAGAnything API service
-make ui          # Start Streamlit web interface
-make dev         # Start both services simultaneously
+make dev         # Start API service with auto-reload
 make test        # Run integration tests
-make install-ui  # Install UI dependencies
 make stop        # Stop all running services
 ```
 

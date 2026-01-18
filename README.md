@@ -1023,8 +1023,6 @@ python examples/text_format_test.py --check-reportlab --file dummy
 
 ## FastAPI Service
 
-### FastAPI Service (Backend)
-
 Spin up a minimal API server to query and process documents using RAG-Anything with any OpenAI-compatible backend (LM Studio, Ollama, vLLM, DeepSeek, etc.).
 
 Quick start (using uv):

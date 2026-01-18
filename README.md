@@ -1058,6 +1058,8 @@ PARSER=mineru                   # Parser selection: mineru or docling
 PARSE_METHOD=auto              # Parse method: auto, ocr, or txt
 ```
 
+> **LLM Recommendation:** For optimal performance with extensive RAG queries, it is recommended to use a text generation LLM that can handle at least **262,144 tokens** (e.g., Qwen models). This large context window helps prevent context overflow errors when processing comprehensive multimodal knowledge graphs.
+
 **Note:** For backward compatibility, legacy environment variable names are still supported:
 - `MINERU_PARSE_METHOD` is deprecated, please use `PARSE_METHOD`
 

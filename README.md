@@ -46,11 +46,15 @@
   <a href="#-quick-start" style="text-decoration: none;">
     <img src="https://img.shields.io/badge/Quick%20Start-Get%20Started%20Now-00d9ff?style=for-the-badge&logo=rocket&logoColor=white&labelColor=1a1a2e">
   </a>
+  <a href="#fastapi-service" style="text-decoration: none;">
+    <img src="https://img.shields.io/badge/FastAPI%20Service-Deploy%20Now-00d9ff?style=for-the-badge&logo=fastapi&logoColor=white&labelColor=1a1a2e">
+  </a>
 </div>
 
 ---
 
 ## 🎉 News
+- [X] [2026.01]🎯📢 🚀 Released **FastAPI Service** for RAG-Anything! Now includes a production-ready API server with Office document support, Excel processing, and seamless integration capabilities.
 - [X] [2025.10]🎯📢 🚀 We have released the technical report of [RAG-Anything](http://arxiv.org/abs/2510.12323). Access it now to explore our latest research findings.
 - [X] [2025.08]🎯📢 🔍 RAG-Anything now features **VLM-Enhanced Query** mode! When documents include images, the system seamlessly integrates them into VLM for advanced multimodal analysis, combining visual and textual context for deeper insights.
 - [X] [2025.07]🎯📢 RAG-Anything now features a [context configuration module](docs/context_aware_processing.md), enabling intelligent integration of relevant contextual information to enhance multimodal content processing.
@@ -1032,13 +1036,16 @@ uv run uvicorn api.app:app --reload
 make server
 ```
 
-**Available Make Commands:**
-```bash
-make server      # Start RAGAnything API service
-make dev         # Start API service with auto-reload
-make test        # Run integration tests
-make stop        # Stop all running services
-```
+**Command Reference:**
+
+| Action | Make Command | Full UV Command |
+|--------|--------------|-----------------|
+| **Start Server** | `make server` | `uv run uvicorn api.app:app --reload` |
+| **Run Integration Test** | `make integration-test` | `uv run python api/core_endpoint_test.py api/datasets/patient_records_small.xlsx` |
+| **Run Mock Test** | `make mock-test` | `uv run python api/core_endpoint_test.py api/datasets/medical_symptoms_small.xlsx` |
+| **Dev Mode** | `make dev` | `uv run uvicorn api.app:app &` |
+| **Stop Server** | `make stop` | `pkill -f "uvicorn api.app:app"` |
+
 
 ---
 

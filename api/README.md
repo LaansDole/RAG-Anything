@@ -17,14 +17,16 @@ Server will be available at: http://127.0.0.1:8000/docs
 
 ## Environment Variables
 
-Configure via `.env` file:
+Configure via `.env` file (see project root `.env.example` for details):
 ```env
 LLM_BINDING_HOST=http://localhost:1234/v1
 LLM_BINDING_API_KEY=lm-studio
+# Recommended: Use models with 262k+ context (e.g., Qwen) to avoid overflow
 LLM_MODEL=openai/gpt-oss-20b
 EMBEDDING_BINDING_HOST=http://localhost:1234/v1
 EMBEDDING_BINDING_API_KEY=lm-studio
 EMBEDDING_MODEL=text-embedding-nomic-embed-text-v1.5
+EMBEDDING_DIM=768 # Ensure this matches your model (e.g. 1024 for bge-m3)
 WORKING_DIR=./rag_storage_service
 ```
 

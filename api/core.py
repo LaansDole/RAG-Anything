@@ -3,6 +3,7 @@ import uuid
 import asyncio
 import logging
 from typing import List, Optional
+from fastapi import Request
 
 from raganything import RAGAnything, RAGAnythingConfig
 from lightrag.utils import EmbeddingFunc
@@ -15,12 +16,21 @@ LM_EMBED_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-embeddinggemma-300
 LM_EMBED_BASE_URL = os.getenv("EMBEDDING_BINDING_HOST", "http://localhost:1234/v1")
 LM_EMBED_API_KEY = os.getenv("EMBEDDING_BINDING_API_KEY", "lm-studio")
 
-rag_instance: Optional[RAGAnything] = None
-
 # Concurrency limiter and timeout for LM Studio calls
 LLM_MAX_CONCURRENCY = int(os.getenv("LLM_MAX_CONCURRENCY", "4"))
 _LLM_SEMAPHORE = asyncio.Semaphore(LLM_MAX_CONCURRENCY)
 LLM_REQUEST_TIMEOUT = float(os.getenv("LLM_REQUEST_TIMEOUT", "120"))  # seconds
+
+
+async def get_rag_dependency(request: Request) -> RAGAnything:
+    if not hasattr(request.app.state, "rag_instance"):
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=500,
+            detail="RAG instance not initialized. Please check server startup logs.",
+        )
+    return request.app.state.rag_instance
 
 
 async def lmstudio_llm_model_func(
@@ -159,11 +169,7 @@ def make_embedding_func() -> EmbeddingFunc:
     )
 
 
-async def get_rag() -> RAGAnything:
-    global rag_instance
-    if rag_instance is not None:
-        return rag_instance
-
+async def initialize_rag() -> RAGAnything:
     # Fresh working dir to isolate demo runs
     working_dir = os.getenv("WORKING_DIR", f"./rag_storage_service/{uuid.uuid4()}")
     config = RAGAnythingConfig(
@@ -178,7 +184,6 @@ async def get_rag() -> RAGAnything:
     rag_instance = RAGAnything(
         config=config,
         llm_model_func=lmstudio_llm_model_func,
-        # vision_model_func removed - not needed for Office document processing
         embedding_func=make_embedding_func(),
     )
 
@@ -204,16 +209,16 @@ async def get_rag() -> RAGAnything:
 logger = logging.getLogger(__name__)
 
 
-async def cleanup_resources():
-    """Cleanup global RAG instance and resources"""
-    global rag_instance
+async def cleanup_rag(rag_instance: Optional[RAGAnything]) -> None:
+    """Cleanup RAG instance and finalize storages"""
     if rag_instance is not None:
         try:
-            # Finalize storages if the method exists
+            # Finalize storages if lightrag instance is available
             if hasattr(rag_instance, "lightrag") and rag_instance.lightrag:
-                from lightrag.utils import finalize_storages
-
-                await finalize_storages()
-            rag_instance = None
+                try:
+                    await rag_instance.lightrag.finalize_storages()
+                    logger.info("LightRAG storages finalized successfully")
+                except Exception as e:
+                    logger.warning(f"Could not finalize storages: {e}")
         except Exception as e:
             logger.error(f"Error cleaning up RAG instance: {e}")

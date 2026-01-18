@@ -6,9 +6,11 @@ from typing import Union, Optional
 import json
 import re
 import logging
-from fastapi import APIRouter, HTTPException, UploadFile, File
+import aiofiles
+from datetime import datetime
+from fastapi import APIRouter, HTTPException, UploadFile, File, Request, Depends
 
-from .core import get_rag
+from .core import get_rag_dependency
 from .models import (
     QueryRequest,
     MultimodalQueryRequest,
@@ -20,6 +22,79 @@ from .utils import check_shutdown, run_with_cancellation
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# File upload configuration
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+CHUNK_SIZE = 8192  # 8KB chunks for streaming
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize uploaded filename to prevent path traversal attacks.
+    Generates a random UUID-based filename for maximum security.
+
+    Args:
+        filename: Original filename from upload
+
+    Returns:
+        Sanitized filename with random UUID and original extension
+    """
+    # Extract extension safely
+    original_name = Path(filename).name  # Remove any path components
+    extension = Path(original_name).suffix.lower()
+
+    # Validate extension length
+    if len(extension) > 10:
+        extension = ""
+
+    # Generate random filename for security
+    safe_name = f"{uuid.uuid4()}{extension}"
+    logger.info(f"Sanitized filename: {filename} -> {safe_name}")
+    return safe_name
+
+
+async def stream_file_with_size_limit(
+    file: UploadFile, dest_path: str, max_size: int = MAX_FILE_SIZE
+) -> int:
+    total_size = 0
+
+    try:
+        async with aiofiles.open(dest_path, "wb") as dest:
+            while True:
+                chunk = await file.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+
+                total_size += len(chunk)
+                if total_size > max_size:
+                    # Clean up partial file
+                    await dest.close()
+                    if os.path.exists(dest_path):
+                        os.remove(dest_path)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File too large. Maximum size: {max_size / (1024 * 1024):.1f}MB",
+                    )
+
+                await dest.write(chunk)
+
+        logger.info(
+            "File streamed successfully",
+            extra={"dest_path": dest_path, "size_bytes": total_size},
+        )
+        return total_size
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Clean up on error
+        if os.path.exists(dest_path):
+            try:
+                os.remove(dest_path)
+            except Exception:
+                pass
+        logger.error(f"Error streaming file: {e}", extra={"dest_path": dest_path})
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
 
 def serialize_for_json(obj):
@@ -76,8 +151,14 @@ def validate_office_document(file_path: str):
 
 
 @router.get("/health")
-async def health():
-    return {"status": "ok"}
+async def health(request: Request):
+    """Enhanced health check endpoint with system information"""
+    return {
+        "status": "ok",
+        "rag_initialized": hasattr(request.app.state, "rag_instance"),
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "0.1.0",
+    }
 
 
 def parse_structured_response(result: str) -> dict:
@@ -131,9 +212,17 @@ def parse_structured_response(result: str) -> dict:
 
 
 @router.post("/query", response_model=QueryResponse)
-async def query(req: QueryRequest):
-    rag = await get_rag()
+async def query(request: Request, req: QueryRequest, rag=Depends(get_rag_dependency)):
+    """
+    Query the RAG system with rate limiting.
+    Rate limit: 100/minute (configured in app.py)
+    """
     try:
+        logger.info(
+            "Query received",
+            extra={"query_preview": req.query[:50], "mode": req.mode},
+        )
+
         # Wrap query with cancellation support
         result = await run_with_cancellation(
             rag.aquery(req.query, mode=req.mode),
@@ -151,26 +240,35 @@ async def query(req: QueryRequest):
             return QueryResponse(result=structured_result.get("result", result))
 
     except Exception as e:
+        logger.error(
+            "Query failed",
+            extra={
+                "query_preview": req.query[:50],
+                "mode": req.mode,
+                "error": str(e),
+            },
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/query-multimodal", response_model=QueryResponse)
-async def query_multimodal(req: MultimodalQueryRequest):
-    rag = await get_rag()
+async def query_multimodal(
+    request: Request, req: MultimodalQueryRequest, rag=Depends(get_rag_dependency)
+):
+    """
+    Query with multimodal content support.
+    Rate limit: 100/minute (configured in app.py)
+    """
     try:
-        # Enhanced logging for debugging
-        logger.info(f"Multimodal query received: {req.query}")
-        logger.info(f"Mode: {req.mode}")
-        logger.info(f"Multimodal content count: {len(req.multimodal_content)}")
+        logger.info(
+            "Multimodal query received",
+            extra={
+                "query_preview": req.query[:50],
+                "mode": req.mode,
+                "content_count": len(req.multimodal_content),
+            },
+        )
 
-        # Log multimodal content structure for debugging
-        if req.multimodal_content:
-            for i, content in enumerate(req.multimodal_content):
-                logger.info(f"Content {i + 1}: {content}")
-        else:
-            logger.info("No multimodal content provided - will fallback to text query")
-
-        # For Office documents, we process structured content (tables, text) without images
         # Wrap with cancellation support
         result = await run_with_cancellation(
             rag.aquery_with_multimodal(
@@ -193,37 +291,62 @@ async def query_multimodal(req: MultimodalQueryRequest):
 
     except AttributeError as e:
         error_msg = f"Method not available: aquery_with_multimodal() - {str(e)}"
-        logger.error(f"AttributeError: {error_msg}")
+        logger.error(
+            "AttributeError in multimodal query",
+            extra={"error": error_msg},
+        )
         raise HTTPException(status_code=501, detail=error_msg)
     except TypeError as e:
         error_msg = f"Invalid parameters for aquery_with_multimodal(): {str(e)}"
-        logger.error(f"TypeError: {error_msg}")
+        logger.error(
+            "TypeError in multimodal query",
+            extra={"error": error_msg},
+        )
         raise HTTPException(status_code=400, detail=error_msg)
     except Exception as e:
         error_msg = f"Multimodal query failed: {str(e)}"
-        logger.error(f"Exception: {error_msg}")
-        logger.error(f"Exception type: {type(e).__name__}")
-        import traceback
-
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(
+            "Exception in multimodal query",
+            extra={
+                "error": error_msg,
+                "error_type": type(e).__name__,
+            },
+        )
         raise HTTPException(status_code=500, detail=error_msg)
 
 
 @router.post("/process-file", response_model=FileProcessingResponse)
-async def process_file(file: UploadFile = File(...)):
-    rag = await get_rag()
-
+async def process_file(
+    request: Request, file: UploadFile = File(...), rag=Depends(get_rag_dependency)
+):
+    """
+    Process uploaded file with security controls.
+    - File size limit: 100MB
+    - Filename sanitization to prevent path traversal
+    - Async streaming for memory efficiency
+    """
     # Save uploaded file to a temp path inside working directory
     working_dir = rag.config.working_dir
     os.makedirs(working_dir, exist_ok=True)
-    dest_path = os.path.join(working_dir, file.filename)
+
+    # Sanitize filename to prevent path traversal
+    safe_filename = sanitize_filename(file.filename)
+    dest_path = os.path.join(working_dir, safe_filename)
 
     try:
         # Check for shutdown before file operations
         await check_shutdown()
 
-        with open(dest_path, "wb") as f:
-            f.write(await file.read())
+        # Stream file with size validation
+        file_size = await stream_file_with_size_limit(file, dest_path, MAX_FILE_SIZE)
+        logger.info(
+            "File uploaded successfully",
+            extra={
+                "filename": file.filename,
+                "safe_filename": safe_filename,
+                "size_bytes": file_size,
+            },
+        )
 
         # Validate file format and check dependencies
         validate_office_document(dest_path)
@@ -267,11 +390,26 @@ async def process_file(file: UploadFile = File(...)):
             error_msg += (
                 " Please ensure LibreOffice is installed for Office document support."
             )
+        logger.error(
+            "File processing failed",
+            extra={
+                "filename": file.filename,
+                "error": error_msg,
+            },
+        )
         raise HTTPException(status_code=500, detail=error_msg)
+    finally:
+        # Clean up uploaded file
+        if os.path.exists(dest_path):
+            try:
+                os.remove(dest_path)
+            except Exception:
+                pass  # Ignore cleanup errors
 
 
 @router.post("/process-excel", response_model=ExcelProcessingResponse)
 async def process_excel_file(
+    request: Request,
     file: UploadFile = File(...),
     max_rows: Optional[int] = None,
     sheet_name: Union[str, int] = 0,
@@ -279,12 +417,16 @@ async def process_excel_file(
     include_summary: bool = True,
     chunk_size: int = 100,
     doc_id: Optional[str] = None,
+    rag=Depends(get_rag_dependency),
 ):
-    """Process Excel file and insert into RAG system"""
-    rag = await get_rag()
-
+    """
+    Process Excel file and insert into RAG system with security controls.
+    - File size limit: 100MB
+    - Filename sanitization
+    - Async streaming
+    """
     # Validate file extension
-    if not file.filename.lower().endswith((".xlsx", ".xls")):
+    if file.filename and not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(
             status_code=400, detail="Only Excel files (.xlsx, .xls) are supported"
         )
@@ -292,14 +434,25 @@ async def process_excel_file(
     # Save uploaded file to a temp path inside working directory
     working_dir = rag.config.working_dir
     os.makedirs(working_dir, exist_ok=True)
-    dest_path = os.path.join(working_dir, file.filename)
+
+    # Sanitize filename
+    safe_filename = sanitize_filename(file.filename or "excel_upload.xlsx")
+    dest_path = os.path.join(working_dir, safe_filename)
 
     try:
         # Check for shutdown before file operations
         await check_shutdown()
 
-        with open(dest_path, "wb") as f:
-            f.write(await file.read())
+        # Stream file with size validation
+        file_size = await stream_file_with_size_limit(file, dest_path, MAX_FILE_SIZE)
+        logger.info(
+            "Excel file uploaded successfully",
+            extra={
+                "filename": file.filename,
+                "safe_filename": safe_filename,
+                "size_bytes": file_size,
+            },
+        )
 
         logger.info(f"Starting Excel processing for {file.filename}")
 

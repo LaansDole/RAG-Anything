@@ -1,16 +1,22 @@
-from typing import List, Optional, Union
-from pydantic import BaseModel
+from typing import List, Optional, Union, Literal
+from pydantic import BaseModel, Field
 
 
 class QueryRequest(BaseModel):
-    query: str
-    mode: str = "hybrid"
+    query: str = Field(..., min_length=1, max_length=2000, description="Query text")
+    mode: Literal["local", "global", "hybrid", "naive"] = Field(
+        default="hybrid", description="Query mode"
+    )
 
 
 class MultimodalQueryRequest(BaseModel):
-    query: str
-    mode: str = "hybrid"
-    multimodal_content: List[dict] = []
+    query: str = Field(..., min_length=1, max_length=2000, description="Query text")
+    mode: Literal["local", "global", "hybrid", "naive"] = Field(
+        default="hybrid", description="Query mode"
+    )
+    multimodal_content: List[dict] = Field(
+        default_factory=list, description="Multimodal content items"
+    )
 
 
 class QueryResponse(BaseModel):

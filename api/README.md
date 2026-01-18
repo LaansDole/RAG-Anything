@@ -19,6 +19,7 @@ Server will be available at: http://127.0.0.1:8000/docs
 
 Configure via `.env` file (see project root `.env.example` for details):
 ```env
+# Support for any OpenAI-compatible backend (LM Studio, Ollama, vLLM, DeepSeek, etc.)
 LLM_BINDING_HOST=http://localhost:1234/v1
 LLM_BINDING_API_KEY=lm-studio
 # Recommended: Use models with 262k+ context (e.g., Qwen) to avoid overflow

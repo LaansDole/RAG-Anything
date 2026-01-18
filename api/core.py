@@ -149,7 +149,8 @@ async def lmstudio_llm_model_func(
 async def lmstudio_embedding_async(texts: List[str]) -> List[List[float]]:
     from lightrag.llm.openai import openai_embed
 
-    embeddings = await openai_embed(
+    # This allows custom embedding dimensions configured via environment variables
+    embeddings = await openai_embed.func(
         texts=texts,
         model=LM_EMBED_MODEL,
         base_url=LM_EMBED_BASE_URL,

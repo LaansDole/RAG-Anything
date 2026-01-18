@@ -26,7 +26,7 @@ dependencies = [
     "huggingface_hub",
     "lightrag-hku",
     "mineru[core]",
-    "pre-commit>=4.5.1",
+    "openpyxl>=3.1.5",
     "slowapi>=0.1.9",
     "tqdm",
     "uvicorn[standard]>=0.35.0",
@@ -65,6 +65,7 @@ dev-dependencies = [
     "mypy",
     "openai",
     "python-dotenv",
+    "pre-commit>=4.5.1",
 ]
 
 [tool.setuptools.packages.find]

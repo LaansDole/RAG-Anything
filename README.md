@@ -1029,7 +1029,7 @@ Quick start (using uv):
 
 ```bash
 # Install FastAPI and Uvicorn into the existing uv environment
-uv add fastapi uvicorn[standard]
+uv sync
 
 # Run the server (reload for dev)
 uv run uvicorn api.app:app --reload

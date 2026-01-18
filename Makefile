@@ -9,12 +9,6 @@ server:
 	@echo "Press Ctrl+C to gracefully stop the server"
 	uv run uvicorn api.app:app --reload
 
-.PHONY: dev
-dev:
-	@echo "Starting RAGAnything development environment..."
-	@echo "1. Starting API server..."
-	@uv run uvicorn api.app:app &
-
 .PHONY: stop
 stop:
 	@echo "Stopping all services..."
